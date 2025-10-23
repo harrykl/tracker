@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <title>Kumulativer Durchschnitt Lead- & Cycle-Time (mit heutigem Wert)</title>
+  <title>Lead- & Cycle-Time – letzte 90 Tage</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
   <style>
@@ -19,7 +19,7 @@
   </style>
 </head>
 <body>
-  <h1>Kumulativer Durchschnitt Lead- & Cycle-Time</h1>
+  <h1>Durchschnittliche Lead- & Cycle-Time – letzte 90 Tage</h1>
   <p>Datenquelle: <code>Prozessmetriken/issue_project_status.csv</code></p>
   <p id="statusMsg">Lade Daten...</p>
 
@@ -32,7 +32,7 @@
       download: true,
       header: true,
       skipEmptyLines: true,
-      delimiter: ";", // ggf. entfernen, falls CSV Kommas verwendet
+      delimiter: ";", // evtl. entfernen, falls CSV Kommas statt Semikolons nutzt
       complete: function(results) {
         const data = results.data;
         if (!data.length) {
@@ -41,6 +41,7 @@
         }
 
         const dailyData = {};
+
         data.forEach(row => {
           const createdAt = row['CreatedAt'] || row['created_at'];
           const leadTimeStr = row['LeadTime'] || row['lead_time'];
@@ -62,44 +63,42 @@
           dailyData[dateKey].count++;
         });
 
+        // Sortiere alle vorhandenen Tage
         const sortedDates = Object.keys(dailyData).sort();
-        if (!sortedDates.length) {
-          document.getElementById('statusMsg').innerText = 'Keine gültigen Datensätze.';
+
+        // Begrenze auf letzte 90 Tage
+        const today = new Date();
+        const cutoff = new Date(today);
+        cutoff.setDate(cutoff.getDate() - 90);
+
+        const filteredDates = sortedDates.filter(d => new Date(d) >= cutoff);
+
+        if (!filteredDates.length) {
+          document.getElementById('statusMsg').innerText = 'Keine Daten in den letzten 90 Tagen.';
           return;
         }
 
         const labels = [];
-        const cumulativeLead = [];
-        const cumulativeCycle = [];
+        const avgLead = [];
+        const avgCycle = [];
 
-        let leadSumTotal = 0;
-        let cycleSumTotal = 0;
-        let totalCount = 0;
-
-        sortedDates.forEach(date => {
+        filteredDates.forEach(date => {
           const { leadSum, cycleSum, count } = dailyData[date];
-          leadSumTotal += leadSum;
-          cycleSumTotal += cycleSum;
-          totalCount += count;
           labels.push(date);
-          cumulativeLead.push(leadSumTotal / totalCount);
-          cumulativeCycle.push(cycleSumTotal / totalCount);
+          avgLead.push(leadSum / count);
+          avgCycle.push(cycleSum / count);
         });
 
-        // heutigen Wert bestimmen (letzter in der Liste)
-        const lastDate = labels[labels.length - 1];
-        const todayLead = cumulativeLead[cumulativeLead.length - 1];
-        const todayCycle = cumulativeCycle[cumulativeCycle.length - 1];
-
-        drawChart(labels, cumulativeLead, cumulativeCycle, lastDate, todayLead, todayCycle);
+        drawChart(labels, avgLead, avgCycle);
         document.getElementById('statusMsg').innerText = 'Diagramm erfolgreich geladen.';
       },
       error: function(err) {
         document.getElementById('statusMsg').innerText = 'Fehler beim Laden der CSV.';
+        console.error(err);
       }
     });
 
-    function drawChart(labels, cumulativeLead, cumulativeCycle, lastDate, todayLead, todayCycle) {
+    function drawChart(labels, avgLead, avgCycle) {
       const ctx = document.getElementById('timeChart').getContext('2d');
       new Chart(ctx, {
         type: 'line',
@@ -107,42 +106,24 @@
           labels,
           datasets: [
             {
-              label: 'Kumulativer Durchschnitt Lead Time (Tage)',
-              data: cumulativeLead,
+              label: 'Durchschnittliche Lead Time (Tage)',
+              data: avgLead,
               borderColor: 'rgba(54, 162, 235, 1)',
               backgroundColor: 'rgba(54, 162, 235, 0.2)',
               tension: 0.3,
               fill: true,
-              pointRadius: 2
+              pointRadius: 4,
+              pointHoverRadius: 6
             },
             {
-              label: 'Kumulativer Durchschnitt Cycle Time (Tage)',
-              data: cumulativeCycle,
+              label: 'Durchschnittliche Cycle Time (Tage)',
+              data: avgCycle,
               borderColor: 'rgba(255, 99, 132, 1)',
               backgroundColor: 'rgba(255, 99, 132, 0.2)',
               tension: 0.3,
               fill: true,
-              pointRadius: 2
-            },
-            // heutiger Punkt LeadTime
-            {
-              label: 'Heutiger LeadTime-Durchschnitt',
-              data: labels.map(d => (d === lastDate ? todayLead : null)),
-              borderColor: 'transparent',
-              backgroundColor: 'rgba(54, 162, 235, 1)',
-              pointRadius: 8,
-              pointHoverRadius: 10,
-              type: 'scatter'
-            },
-            // heutiger Punkt CycleTime
-            {
-              label: 'Heutiger CycleTime-Durchschnitt',
-              data: labels.map(d => (d === lastDate ? todayCycle : null)),
-              borderColor: 'transparent',
-              backgroundColor: 'rgba(255, 99, 132, 1)',
-              pointRadius: 8,
-              pointHoverRadius: 10,
-              type: 'scatter'
+              pointRadius: 4,
+              pointHoverRadius: 6
             }
           ]
         },
@@ -151,19 +132,19 @@
           interaction: { mode: 'index', intersect: false },
           scales: {
             x: {
-              title: { display: true, text: 'Datum (YYYY-MM-DD)' },
+              title: { display: true, text: 'Datum (letzte 90 Tage)' },
               ticks: { autoSkip: true, maxTicksLimit: 15 }
             },
             y: {
               beginAtZero: true,
-              title: { display: true, text: 'Kumulativer Durchschnitt (Tage)' }
+              title: { display: true, text: 'Durchschnitt (Tage)' }
             }
           },
           plugins: {
             legend: { position: 'top' },
             tooltip: {
               callbacks: {
-                label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2) + ' Tage'
+                label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} Tage`
               }
             }
           }
