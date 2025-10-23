@@ -1,5 +1,5 @@
-- name: Test GitHub Token
-  env:
-    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  run: |
-    curl -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/user
+name: Test GitHub Token
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+run: |
+  curl -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/user
