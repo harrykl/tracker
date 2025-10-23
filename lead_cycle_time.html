@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <title>Lead- & Cycle-Time – letzte 90 Tage</title>
+  <title>Durchschnitt Cycle- & Lead-Time (letzte 90 Tage + morgen)</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
   <style>
@@ -19,7 +19,7 @@
   </style>
 </head>
 <body>
-  <h1>Durchschnittliche Lead- & Cycle-Time – letzte 90 Tage</h1>
+  <h1>Durchschnitt Cycle- & Lead-Time (letzte 90 Tage + morgen)</h1>
   <p>Datenquelle: <code>Prozessmetriken/issue_project_status.csv</code></p>
   <p id="statusMsg">Lade Daten...</p>
 
@@ -28,70 +28,96 @@
   <script>
     const csvUrl = 'https://raw.githubusercontent.com/harrykl/tracker/main/Prozessmetriken/issue_project_status.csv';
 
+    // Hilfsfunktion: Erstelle Array mit allen Tagen von start bis ende (yyyy-mm-dd)
+    function getDateRangeArray(start, end) {
+      const arr = [];
+      let dt = new Date(start);
+      while (dt <= end) {
+        arr.push(dt.toISOString().slice(0, 10));
+        dt.setDate(dt.getDate() + 1);
+      }
+      return arr;
+    }
+
     Papa.parse(csvUrl, {
       download: true,
       header: true,
       skipEmptyLines: true,
-      delimiter: ";", // evtl. entfernen, falls CSV Kommas statt Semikolons nutzt
       complete: function(results) {
         const data = results.data;
+
         if (!data.length) {
           document.getElementById('statusMsg').innerText = 'Keine Daten gefunden.';
           return;
         }
 
-        const dailyData = {};
+        // Aktuelles Datum (heute), Startdatum 90 Tage davor, Enddatum morgen
+        const today = new Date();
+        const startDate = new Date(today);
+        startDate.setDate(today.getDate() - 90);
+        const endDate = new Date(today);
+        endDate.setDate(today.getDate() + 1); // morgen
+
+        // Erzeuge alle Tage im Zeitraum
+        const allDates = getDateRangeArray(startDate, endDate);
+
+        // Struktur: Für jeden Tag Summe LeadTime, Summe CycleTime, Count
+        const dailyStats = {};
+        allDates.forEach(d => {
+          dailyStats[d] = { leadSum: 0, cycleSum: 0, count: 0 };
+        });
 
         data.forEach(row => {
-          const createdAt = row['CreatedAt'] || row['created_at'];
-          const leadTimeStr = row['LeadTime'] || row['lead_time'];
-          const cycleTimeStr = row['CycleTime'] || row['cycle_time'];
+          // Nutze 'ClosedAt' als Schließdatum, alternativ 'closed_at' - bitte ggf. anpassen!
+          const closedAt = row['ClosedAt'] || row['closed_at'];
+          const leadTimeStr = row['Lead Time (days)'] || row['Lead Time (days)'];
+          const cycleTimeStr = row['Cycle Time (days)'] || row['Cycle Time (days)'];
 
-          if (!createdAt || !leadTimeStr || !cycleTimeStr) return;
+          if (!closedAt || !leadTimeStr || !cycleTimeStr) return;
 
-          const date = new Date(createdAt);
-          if (isNaN(date)) return;
+          const closedDate = new Date(closedAt);
+          if (isNaN(closedDate)) return;
 
-          const dateKey = date.toISOString().split('T')[0];
+          // Datum YYYY-MM-DD
+          const closedDateStr = closedDate.toISOString().slice(0, 10);
+
+          // Nur wenn im Zeitraum (letzte 90 Tage bis morgen)
+          if (closedDate < startDate || closedDate > endDate) return;
+
           const leadTime = parseFloat(leadTimeStr.replace(',', '.'));
           const cycleTime = parseFloat(cycleTimeStr.replace(',', '.'));
           if (isNaN(leadTime) || isNaN(cycleTime)) return;
 
-          if (!dailyData[dateKey]) dailyData[dateKey] = { leadSum: 0, cycleSum: 0, count: 0 };
-          dailyData[dateKey].leadSum += leadTime;
-          dailyData[dateKey].cycleSum += cycleTime;
-          dailyData[dateKey].count++;
+          if (!dailyStats[closedDateStr]) dailyStats[closedDateStr] = { leadSum: 0, cycleSum: 0, count: 0 };
+
+          dailyStats[closedDateStr].leadSum += leadTime;
+          dailyStats[closedDateStr].cycleSum += cycleTime;
+          dailyStats[closedDateStr].count++;
         });
 
-        // Sortiere alle vorhandenen Tage
-        const sortedDates = Object.keys(dailyData).sort();
-
-        // Begrenze auf letzte 90 Tage
-        const today = new Date();
-        const cutoff = new Date(today);
-        cutoff.setDate(cutoff.getDate() - 90);
-
-        const filteredDates = sortedDates.filter(d => new Date(d) >= cutoff);
-
-        if (!filteredDates.length) {
-          document.getElementById('statusMsg').innerText = 'Keine Daten in den letzten 90 Tagen.';
-          return;
-        }
-
+        // Daten für Chart vorbereiten
         const labels = [];
-        const avgLead = [];
-        const avgCycle = [];
+        const avgLeadTimes = [];
+        const avgCycleTimes = [];
 
-        filteredDates.forEach(date => {
-          const { leadSum, cycleSum, count } = dailyData[date];
-          labels.push(date);
-          avgLead.push(leadSum / count);
-          avgCycle.push(cycleSum / count);
+        allDates.forEach(dateStr => {
+          labels.push(dateStr);
+          const dayData = dailyStats[dateStr];
+          if (dayData.count > 0) {
+            avgLeadTimes.push(dayData.leadSum / dayData.count);
+            avgCycleTimes.push(dayData.cycleSum / dayData.count);
+          } else {
+            // Kein Wert für diesen Tag - setze null, damit Chart.js Lücken anzeigt
+            avgLeadTimes.push(null);
+            avgCycleTimes.push(null);
+          }
         });
 
-        drawChart(labels, avgLead, avgCycle);
+        drawChart(labels, avgLeadTimes, avgCycleTimes);
+
         document.getElementById('statusMsg').innerText = 'Diagramm erfolgreich geladen.';
       },
+
       error: function(err) {
         document.getElementById('statusMsg').innerText = 'Fehler beim Laden der CSV.';
         console.error(err);
@@ -106,24 +132,26 @@
           labels,
           datasets: [
             {
-              label: 'Durchschnittliche Lead Time (Tage)',
+              label: 'Durchschnitt Lead Time (Tage)',
               data: avgLead,
               borderColor: 'rgba(54, 162, 235, 1)',
               backgroundColor: 'rgba(54, 162, 235, 0.2)',
-              tension: 0.3,
               fill: true,
+              tension: 0.3,
               pointRadius: 4,
-              pointHoverRadius: 6
+              pointHoverRadius: 7,
+              spanGaps: false
             },
             {
-              label: 'Durchschnittliche Cycle Time (Tage)',
+              label: 'Durchschnitt Cycle Time (Tage)',
               data: avgCycle,
               borderColor: 'rgba(255, 99, 132, 1)',
               backgroundColor: 'rgba(255, 99, 132, 0.2)',
-              tension: 0.3,
               fill: true,
+              tension: 0.3,
               pointRadius: 4,
-              pointHoverRadius: 6
+              pointHoverRadius: 7,
+              spanGaps: false
             }
           ]
         },
@@ -132,8 +160,8 @@
           interaction: { mode: 'index', intersect: false },
           scales: {
             x: {
-              title: { display: true, text: 'Datum (letzte 90 Tage)' },
-              ticks: { autoSkip: true, maxTicksLimit: 15 }
+              title: { display: true, text: 'Datum' },
+              ticks: { maxTicksLimit: 15 }
             },
             y: {
               beginAtZero: true,
@@ -144,7 +172,7 @@
             legend: { position: 'top' },
             tooltip: {
               callbacks: {
-                label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} Tage`
+                label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y !== null ? ctx.parsed.y.toFixed(2) : 'kein Wert'} Tage`
               }
             }
           }
