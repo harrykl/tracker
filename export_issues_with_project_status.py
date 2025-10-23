@@ -1,6 +1,8 @@
 import os
 import csv
 import requests
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 # GitHub GraphQL API Endpoint
 GITHUB_API_URL = "https://api.github.com/graphql"
