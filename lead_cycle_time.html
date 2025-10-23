@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <title>Durchschnitt Cycle- & Lead-Time (letzte 90 Tage + morgen)</title>
+  <title>Rolling Durchschnitt Cycle- & Lead-Time (letzte 90 Tage + morgen)</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
   <style>
@@ -19,7 +19,7 @@
   </style>
 </head>
 <body>
-  <h1>Durchschnitt Cycle- & Lead-Time (letzte 90 Tage + morgen)</h1>
+  <h1>Rolling Durchschnitt Cycle- & Lead-Time (letzte 90 Tage + morgen)</h1>
   <p>Datenquelle: <code>Prozessmetriken/issue_project_status.csv</code></p>
   <p id="statusMsg">Lade Daten...</p>
 
@@ -28,7 +28,7 @@
   <script>
     const csvUrl = 'https://raw.githubusercontent.com/harrykl/tracker/main/Prozessmetriken/issue_project_status.csv';
 
-    // Hilfsfunktion: Erstelle Array mit allen Tagen von start bis ende (yyyy-mm-dd)
+    // Hilfsfunktion: Erzeuge Array mit Tagen von start bis ende (yyyy-mm-dd)
     function getDateRangeArray(start, end) {
       const arr = [];
       let dt = new Date(start);
@@ -37,6 +37,11 @@
         dt.setDate(dt.getDate() + 1);
       }
       return arr;
+    }
+
+    // Hilfsfunktion: Datum ohne Zeit, als yyyy-mm-dd string
+    function formatDate(d) {
+      return d.toISOString().slice(0, 10);
     }
 
     Papa.parse(csvUrl, {
@@ -51,70 +56,70 @@
           return;
         }
 
-        // Aktuelles Datum (heute), Startdatum 90 Tage davor, Enddatum morgen
+        // Hole alle ClosedAt-Daten mit LeadTime und CycleTime in ein Array mit Datum-Objekten
+        const issues = [];
+        data.forEach(row => {
+          const closedAtStr = row['ClosedAt'] || row['closed_at'];
+          const leadTimeStr = row['Lead Time (days)'] || row['Lead Time (days)'];
+          const cycleTimeStr = row['Cycle Time (days)'] || row['Cycle Time (days)'];
+
+          if (!closedAtStr || !leadTimeStr || !cycleTimeStr) return;
+
+          const closedAtDate = new Date(closedAtStr);
+          if (isNaN(closedAtDate)) return;
+
+          const leadTime = parseFloat(leadTimeStr.replace(',', '.'));
+          const cycleTime = parseFloat(cycleTimeStr.replace(',', '.'));
+
+          if (isNaN(leadTime) || isNaN(cycleTime)) return;
+
+          issues.push({
+            closedAt: closedAtDate,
+            leadTime,
+            cycleTime
+          });
+        });
+
+        // Zeitraum für X-Achse: von heute-90 bis morgen
         const today = new Date();
         const startDate = new Date(today);
         startDate.setDate(today.getDate() - 90);
         const endDate = new Date(today);
-        endDate.setDate(today.getDate() + 1); // morgen
+        endDate.setDate(today.getDate() + 1);
 
-        // Erzeuge alle Tage im Zeitraum
         const allDates = getDateRangeArray(startDate, endDate);
 
-        // Struktur: Für jeden Tag Summe LeadTime, Summe CycleTime, Count
-        const dailyStats = {};
-        allDates.forEach(d => {
-          dailyStats[d] = { leadSum: 0, cycleSum: 0, count: 0 };
-        });
-
-        data.forEach(row => {
-          // Nutze 'ClosedAt' als Schließdatum, alternativ 'closed_at' - bitte ggf. anpassen!
-          const closedAt = row['ClosedAt'] || row['closed_at'];
-          const leadTimeStr = row['Lead Time (days)'] || row['lead time (days)'];
-          const cycleTimeStr = row['Cycle Time (days)'] || row['Cycle Time (days)'];
-
-          if (!closedAt || !leadTimeStr || !cycleTimeStr) return;
-
-          const closedDate = new Date(closedAt);
-          if (isNaN(closedDate)) return;
-
-          // Datum YYYY-MM-DD
-          const closedDateStr = closedDate.toISOString().slice(0, 10);
-
-          // Nur wenn im Zeitraum (letzte 90 Tage bis morgen)
-          if (closedDate < startDate || closedDate > endDate) return;
-
-          const leadTime = parseFloat(leadTimeStr.replace(',', '.'));
-          const cycleTime = parseFloat(cycleTimeStr.replace(',', '.'));
-          if (isNaN(leadTime) || isNaN(cycleTime)) return;
-
-          if (!dailyStats[closedDateStr]) dailyStats[closedDateStr] = { leadSum: 0, cycleSum: 0, count: 0 };
-
-          dailyStats[closedDateStr].leadSum += leadTime;
-          dailyStats[closedDateStr].cycleSum += cycleTime;
-          dailyStats[closedDateStr].count++;
-        });
-
-        // Daten für Chart vorbereiten
-        const labels = [];
+        // Für jeden Tag t in allDates berechnen wir den Durchschnitt aller Issues, die in
+        // [t-90 Tage .. t] geschlossen wurden (rolling window)
         const avgLeadTimes = [];
         const avgCycleTimes = [];
 
-        allDates.forEach(dateStr => {
-          labels.push(dateStr);
-          const dayData = dailyStats[dateStr];
-          if (dayData.count > 0) {
-            avgLeadTimes.push(dayData.leadSum / dayData.count);
-            avgCycleTimes.push(dayData.cycleSum / dayData.count);
-          } else {
-            // Kein Wert für diesen Tag - setze null, damit Chart.js Lücken anzeigt
+        for (const dayStr of allDates) {
+          const day = new Date(dayStr);
+
+          // Intervallstart: day - 90 Tage
+          const windowStart = new Date(day);
+          windowStart.setDate(day.getDate() - 90);
+
+          // Filter Issues in diesem Zeitraum
+          const filteredIssues = issues.filter(issue => {
+            return issue.closedAt >= windowStart && issue.closedAt <= day;
+          });
+
+          if (filteredIssues.length === 0) {
             avgLeadTimes.push(null);
             avgCycleTimes.push(null);
+          } else {
+            // Durchschnitt berechnen
+            const sumLead = filteredIssues.reduce((sum, i) => sum + i.leadTime, 0);
+            const sumCycle = filteredIssues.reduce((sum, i) => sum + i.cycleTime, 0);
+
+            avgLeadTimes.push(sumLead / filteredIssues.length);
+            avgCycleTimes.push(sumCycle / filteredIssues.length);
           }
-        });
+        }
 
-        drawChart(labels, avgLeadTimes, avgCycleTimes);
-
+        drawChart(allDates, avgLeadTimes, avgCycleTimes);
         document.getElementById('statusMsg').innerText = 'Diagramm erfolgreich geladen.';
       },
 
@@ -132,7 +137,7 @@
           labels,
           datasets: [
             {
-              label: 'Durchschnitt Lead Time (Tage)',
+              label: 'Rolling Durchschnitt Lead Time (Tage)',
               data: avgLead,
               borderColor: 'rgba(54, 162, 235, 1)',
               backgroundColor: 'rgba(54, 162, 235, 0.2)',
@@ -143,7 +148,7 @@
               spanGaps: false
             },
             {
-              label: 'Durchschnitt Cycle Time (Tage)',
+              label: 'Rolling Durchschnitt Cycle Time (Tage)',
               data: avgCycle,
               borderColor: 'rgba(255, 99, 132, 1)',
               backgroundColor: 'rgba(255, 99, 132, 0.2)',
