@@ -3,8 +3,6 @@ name: Issue Project Status Tracker
 on:
   issues:
     types: [opened, edited, closed, reopened]
-  schedule:
-    - cron: '*/15 * * * *'  # alle 15 Minuten
   workflow_dispatch:
 
 jobs:
