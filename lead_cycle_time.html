@@ -59,7 +59,7 @@
         // Hole alle ClosedAt-Daten mit LeadTime und CycleTime in ein Array mit Datum-Objekten
         const issues = [];
         data.forEach(row => {
-          const closedAtStr = row['ClosedAt'] || row['closed_at'];
+          const closedAtStr = row['Done'] || row['done'];
           const leadTimeStr = row['Lead Time (days)'] || row['Lead Time (days)'];
           const cycleTimeStr = row['Cycle Time (days)'] || row['Cycle Time (days)'];
 
