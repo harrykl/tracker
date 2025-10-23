@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <title>Lead- und Cycle-Time aus CSV (GitHub-Version)</title>
+  <title>Kumulativer Durchschnitt Lead- & Cycle-Time (GitHub)</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
   <style>
@@ -19,81 +19,87 @@
   </style>
 </head>
 <body>
-  <h1>Durchschnittliche Lead- und Cycle-Time aus GitHub-CSV</h1>
+  <h1>Kumulativer Durchschnitt Lead- & Cycle-Time</h1>
   <p>Datenquelle: <code>Prozessmetriken/issue_project_status.csv</code></p>
-  <p id="statusMsg">Lade Daten von GitHub...</p>
+  <p id="statusMsg">Lade Daten...</p>
 
   <canvas id="timeChart"></canvas>
 
   <script>
-    // 👉 HIER anpassen: Deine eigene RAW-CSV-URL
     const csvUrl = 'https://raw.githubusercontent.com/harrykl/tracker/main/Prozessmetriken/issue_project_status.csv';
-
-    function getMonthYear(dateStr) {
-      const d = new Date(dateStr);
-      if (isNaN(d)) return null;
-      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-    }
 
     Papa.parse(csvUrl, {
       download: true,
       header: true,
       skipEmptyLines: true,
+      delimiter: ";", // ggf. entfernen, falls deine CSV Kommas verwendet
       complete: function(results) {
         const data = results.data;
+        console.log("CSV geladen:", data.length, "Zeilen");
         if (!data.length) {
           document.getElementById('statusMsg').innerText = 'Keine Daten gefunden.';
           return;
         }
 
-        const monthlyData = {};
-
+        // Daten pro Tag aggregieren
+        const dailyData = {};
         data.forEach(row => {
-          const createdAt = row['CreatedAt'];
-          const leadTimeStr = row['Lead Time (days)'];
-          const cycleTimeStr = row['Cycle Time (days)'];
+          const createdAt = row['CreatedAt'] || row['created_at'];
+          const leadTimeStr = row['LeadTime'] || row['lead_time'];
+          const cycleTimeStr = row['CycleTime'] || row['cycle_time'];
 
           if (!createdAt || !leadTimeStr || !cycleTimeStr) return;
 
-          const month = getMonthYear(createdAt);
-          if (!month) return;
+          const date = new Date(createdAt);
+          if (isNaN(date)) return;
+
+          const dateKey = date.toISOString().split('T')[0]; // yyyy-mm-dd
 
           const leadTime = parseFloat(leadTimeStr.replace(',', '.'));
           const cycleTime = parseFloat(cycleTimeStr.replace(',', '.'));
-
           if (isNaN(leadTime) || isNaN(cycleTime)) return;
 
-          if (!monthlyData[month]) {
-            monthlyData[month] = { leadSum: 0, cycleSum: 0, count: 0 };
+          if (!dailyData[dateKey]) {
+            dailyData[dateKey] = { leadSum: 0, cycleSum: 0, count: 0 };
           }
 
-          monthlyData[month].leadSum += leadTime;
-          monthlyData[month].cycleSum += cycleTime;
-          monthlyData[month].count++;
+          dailyData[dateKey].leadSum += leadTime;
+          dailyData[dateKey].cycleSum += cycleTime;
+          dailyData[dateKey].count++;
         });
 
-        const sortedMonths = Object.keys(monthlyData).sort();
+        const sortedDates = Object.keys(dailyData).sort();
 
         const labels = [];
-        const avgLeadTimes = [];
-        const avgCycleTimes = [];
+        const cumulativeLead = [];
+        const cumulativeCycle = [];
 
-        sortedMonths.forEach(month => {
-          const { leadSum, cycleSum, count } = monthlyData[month];
-          labels.push(month);
-          avgLeadTimes.push(leadSum / count);
-          avgCycleTimes.push(cycleSum / count);
+        let leadSumTotal = 0;
+        let cycleSumTotal = 0;
+        let totalCount = 0;
+
+        // kumulativen Durchschnitt berechnen
+        sortedDates.forEach(date => {
+          const { leadSum, cycleSum, count } = dailyData[date];
+          leadSumTotal += leadSum;
+          cycleSumTotal += cycleSum;
+          totalCount += count;
+
+          labels.push(date);
+          cumulativeLead.push(leadSumTotal / totalCount);
+          cumulativeCycle.push(cycleSumTotal / totalCount);
         });
 
-        drawChart(labels, avgLeadTimes, avgCycleTimes);
+        drawChart(labels, cumulativeLead, cumulativeCycle);
         document.getElementById('statusMsg').innerText = 'Diagramm erfolgreich geladen.';
       },
       error: function(err) {
-        document.getElementById('statusMsg').innerText = 'Fehler beim Laden der CSV: ' + err;
+        console.error(err);
+        document.getElementById('statusMsg').innerText = 'Fehler beim Laden der CSV.';
       }
     });
 
-    function drawChart(labels, avgLeadTimes, avgCycleTimes) {
+    function drawChart(labels, cumulativeLead, cumulativeCycle) {
       const ctx = document.getElementById('timeChart').getContext('2d');
       new Chart(ctx, {
         type: 'line',
@@ -101,43 +107,48 @@
           labels,
           datasets: [
             {
-              label: 'Durchschnittliche Lead Time (Tage)',
-              data: avgLeadTimes,
+              label: 'Kumulativer Durchschnitt Lead Time (Tage)',
+              data: cumulativeLead,
               borderColor: 'rgba(54, 162, 235, 1)',
               backgroundColor: 'rgba(54, 162, 235, 0.2)',
-              fill: true,
               tension: 0.3,
-              pointRadius: 5,
-              pointHoverRadius: 7
+              fill: true,
+              pointRadius: 3,
+              pointHoverRadius: 5
             },
             {
-              label: 'Durchschnittliche Cycle Time (Tage)',
-              data: avgCycleTimes,
+              label: 'Kumulativer Durchschnitt Cycle Time (Tage)',
+              data: cumulativeCycle,
               borderColor: 'rgba(255, 99, 132, 1)',
               backgroundColor: 'rgba(255, 99, 132, 0.2)',
-              fill: true,
               tension: 0.3,
-              pointRadius: 5,
-              pointHoverRadius: 7
+              fill: true,
+              pointRadius: 3,
+              pointHoverRadius: 5
             }
           ]
         },
         options: {
           responsive: true,
+          interaction: { mode: 'index', intersect: false },
           scales: {
+            x: {
+              title: { display: true, text: 'Datum (YYYY-MM-DD)' },
+              ticks: { autoSkip: true, maxTicksLimit: 15 }
+            },
             y: {
               beginAtZero: true,
-              title: { display: true, text: 'Tage' }
-            },
-            x: {
-              title: { display: true, text: 'Monat (YYYY-MM)' }
+              title: { display: true, text: 'Kumulativer Durchschnitt (Tage)' }
             }
           },
           plugins: {
             legend: { position: 'top' },
-            tooltip: { mode: 'index', intersect: false }
-          },
-          interaction: { mode: 'nearest', axis: 'x', intersect: false }
+            tooltip: {
+              callbacks: {
+                label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2) + ' Tage'
+              }
+            }
+          }
         }
       });
     }
