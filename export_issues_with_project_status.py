@@ -11,7 +11,7 @@ REPO_OWNER = "harrykl"
 REPO_NAME = "tracker"
 
 # 🔐 GitHub Token aus Umgebungsvariable lesen
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+GITHUB_TOKEN = os.getenv("GH_TOKEN")
 
 if not GITHUB_TOKEN:
     print("❌ Fehler: GITHUB_TOKEN ist nicht gesetzt.")
