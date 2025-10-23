@@ -2,6 +2,7 @@ import os
 import csv
 import requests
 import sys
+from datetime import datetime
 
 # GitHub GraphQL API Endpoint
 GITHUB_API_URL = "https://api.github.com/graphql"
@@ -16,7 +17,7 @@ if not GITHUB_TOKEN:
     print("❌ Fehler: GITHUB_TOKEN ist nicht gesetzt.")
     sys.exit(1)
 
-# GraphQL-Abfrage mit korrekter Behandlung von Union-Typen
+# GraphQL-Abfrage
 query = """
 query {
   repository(owner: "harrykl", name: "tracker") {
@@ -126,7 +127,7 @@ for issue in issues:
     if not row.get(project_status):
         row[project_status] = updated_at
 
-# --- 🔧 Spaltenreihenfolge festlegen ---
+# --- 🔧 Spaltenreihenfolge (Lead & Cycle Time) ---
 preferred_order = [
     "Issue-ID",
     "Title",
@@ -136,8 +137,35 @@ preferred_order = [
     "Todo",
     "In Progress",
     "Resolved",
-    "Done"
+    "Done",
+    "Lead Time (days)",
+    "Cycle Time (days)"
 ]
+
+# Hilfsfunktion zum Parsen von ISO-Daten
+def parse_time(ts):
+    try:
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+# --- 🧮 Lead & Cycle Time berechnen ---
+for row in table.values():
+    created = parse_time(row.get("CreatedAt"))
+    in_progress = parse_time(row.get("In Progress"))
+    done = parse_time(row.get("Done"))
+
+    # Lead Time: CreatedAt → Done
+    if created and done:
+        row["Lead Time (days)"] = round((done - created).total_seconds() / 86400, 2)
+    else:
+        row["Lead Time (days)"] = ""
+
+    # Cycle Time: In Progress → Done
+    if in_progress and done:
+        row["Cycle Time (days)"] = round((done - in_progress).total_seconds() / 86400, 2)
+    else:
+        row["Cycle Time (days)"] = ""
 
 # Alle bekannten Statusfelder, die nicht in der bevorzugten Liste stehen, hinten anhängen
 extra_statuses = [
