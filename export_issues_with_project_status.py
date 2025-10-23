@@ -135,11 +135,15 @@ preferred_order = [
     "Last-UpdatedAt",
     "Todo",
     "In Progress",
+    "Resolved",
     "Done"
 ]
 
 # Alle bekannten Statusfelder, die nicht in der bevorzugten Liste stehen, hinten anhängen
-extra_statuses = [s for s in sorted(all_statuses) if s not in preferred_order and s not in {"Issue-ID", "Title"}]
+extra_statuses = [
+    s for s in sorted(all_statuses)
+    if s not in preferred_order and s not in {"Issue-ID", "Title"}
+]
 all_columns = preferred_order + extra_statuses
 
 # CSV neu schreiben
