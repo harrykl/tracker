@@ -46,7 +46,7 @@ query {{
 """
 
 # Send request to GitHub GraphQL API
-headers = {"Authorization": f"Bearer {GH_TOKEN}"}
+headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
 response = requests.post(GITHUB_API_URL, json={"query": query}, headers=headers)
 data = response.json()
 
