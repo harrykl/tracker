@@ -1,0 +1,27 @@
+name: Test GitHub Token
+
+on:
+  workflow_dispatch:  # Manuelles Auslösen über GitHub UI
+
+jobs:
+  token-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 📥 Repository auschecken
+      uses: actions/checkout@v3
+
+    - name: 🐍 Python einrichten
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+
+    - name: 📦 Abhängigkeiten installieren
+      run: pip install requests
+
+    - name: 🔐 GitHub Token testen
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        echo "Starte Token-Test..."
+        python test_github_token.py
