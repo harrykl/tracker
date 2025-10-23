@@ -1,19 +1,15 @@
-name: Issue Status Tracker with Project
+name: Issue Project Status Tracker
 
 on:
   issues:
     types: [opened, edited, closed, reopened]
-  workflow_dispatch:  # Optional: erlaubt manuelles Auslösen über GitHub UI
+  workflow_dispatch:
 
 jobs:
   export-issue-status:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Debug Netzwerk
-      run: |
-        curl -I https://api.github.com
-
     - name: 📥 Repository auschecken
       uses: actions/checkout@v3
 
@@ -25,12 +21,16 @@ jobs:
     - name: 📦 Abhängigkeiten installieren
       run: pip install requests
 
-    - name: 📊 Projektstatus der Issues exportieren
-      env:
-        GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-        GITHUB_REPOSITORY: ${{ github.repository }}
+    - name: 🌐 Verbindung zur GitHub API testen
       run: |
-        mkdir -p Prozessmetriken
+        echo "Verbindung zur GitHub API wird getestet..."
+        curl -I https://api.github.com
+
+    - name: 📊 Projektstatus exportieren
+      env:
+        GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      run: |
+        export GH_TOKEN=${{ secrets.GH_TOKEN }}
         python export_issues_with_project_status.py
 
     - name: 💾 CSV-Datei committen und pushen
