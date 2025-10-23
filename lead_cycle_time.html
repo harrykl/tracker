@@ -16,17 +16,47 @@
       max-width: 100%;
       height: 450px;
     }
+    input[type="file"] {
+      margin: 20px 0;
+    }
   </style>
 </head>
 <body>
   <h1>Durchschnittliche Lead- und Cycle-Time aus CSV</h1>
-  <p>Datenquelle: <code>issue_project_status.csv</code></p>
+  <p><strong>Datenquelle:</strong> Bitte wähle eine lokale CSV-Datei aus.</p>
+
+  <input type="file" id="csvFileInput" accept=".csv" />
+  <p id="statusMsg">Noch keine Datei ausgewählt.</p>
+
   <canvas id="timeChart"></canvas>
-  <p id="statusMsg">Lade Daten...</p>
 
   <script>
-    // Relative Pfadangabe zur CSV im gleichen Ordner
-    const csvUrl = 'Prozessmetriken/issue_project_status.csv';
+    document.getElementById('csvFileInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) {
+        document.getElementById('statusMsg').innerText = 'Keine Datei ausgewählt.';
+        return;
+      }
+
+      document.getElementById('statusMsg').innerText = 'Lade und verarbeite CSV...';
+
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          const data = results.data;
+          if (!data.length) {
+            document.getElementById('statusMsg').innerText = 'Keine Daten in der Datei gefunden.';
+            return;
+          }
+
+          processData(data);
+        },
+        error: function(err) {
+          document.getElementById('statusMsg').innerText = 'Fehler beim Einlesen der CSV: ' + err.message;
+        }
+      });
+    });
 
     function getMonthYear(dateStr) {
       const d = new Date(dateStr);
@@ -34,109 +64,102 @@
       return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
     }
 
-    Papa.parse(csvUrl, {
-      download: true,
-      header: true,
-      skipEmptyLines: true,
-      complete: function(results) {
-        const data = results.data;
-        if (!data.length) {
-          document.getElementById('statusMsg').innerText = 'Keine Daten gefunden.';
-          return;
+    function processData(data) {
+      const monthlyData = {};
+
+      data.forEach(row => {
+        const createdAt = row['CreatedAt'];
+        const leadTimeStr = row['LeadTime'];
+        const cycleTimeStr = row['CycleTime'];
+
+        if (!createdAt || !leadTimeStr || !cycleTimeStr) return;
+
+        const month = getMonthYear(createdAt);
+        if (!month) return;
+
+        const leadTime = parseFloat(leadTimeStr.replace(',', '.'));
+        const cycleTime = parseFloat(cycleTimeStr.replace(',', '.'));
+
+        if (isNaN(leadTime) || isNaN(cycleTime)) return;
+
+        if (!monthlyData[month]) {
+          monthlyData[month] = { leadSum: 0, cycleSum: 0, count: 0 };
         }
 
-        const monthlyData = {};
+        monthlyData[month].leadSum += leadTime;
+        monthlyData[month].cycleSum += cycleTime;
+        monthlyData[month].count++;
+      });
 
-        data.forEach(row => {
-          const createdAt = row['CreatedAt'];
-          const leadTimeStr = row['LeadTime'];
-          const cycleTimeStr = row['CycleTime'];
-
-          if (!createdAt || !leadTimeStr || !cycleTimeStr) return;
-
-          const month = getMonthYear(createdAt);
-          if (!month) return;
-
-          const leadTime = parseFloat(leadTimeStr.replace(',', '.'));
-          const cycleTime = parseFloat(cycleTimeStr.replace(',', '.'));
-
-          if (isNaN(leadTime) || isNaN(cycleTime)) return;
-
-          if (!monthlyData[month]) {
-            monthlyData[month] = { leadSum: 0, cycleSum: 0, count: 0 };
-          }
-
-          monthlyData[month].leadSum += leadTime;
-          monthlyData[month].cycleSum += cycleTime;
-          monthlyData[month].count++;
-        });
-
-        const sortedMonths = Object.keys(monthlyData).sort();
-
-        const labels = [];
-        const avgLeadTimes = [];
-        const avgCycleTimes = [];
-
-        sortedMonths.forEach(month => {
-          const { leadSum, cycleSum, count } = monthlyData[month];
-          labels.push(month);
-          avgLeadTimes.push(leadSum / count);
-          avgCycleTimes.push(cycleSum / count);
-        });
-
-        const ctx = document.getElementById('timeChart').getContext('2d');
-        new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels,
-            datasets: [
-              {
-                label: 'Durchschnittliche Lead Time (Tage)',
-                data: avgLeadTimes,
-                borderColor: 'rgba(54, 162, 235, 1)',
-                backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                fill: true,
-                tension: 0.3,
-                pointRadius: 5,
-                pointHoverRadius: 7
-              },
-              {
-                label: 'Durchschnittliche Cycle Time (Tage)',
-                data: avgCycleTimes,
-                borderColor: 'rgba(255, 99, 132, 1)',
-                backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                fill: true,
-                tension: 0.3,
-                pointRadius: 5,
-                pointHoverRadius: 7
-              }
-            ]
-          },
-          options: {
-            responsive: true,
-            scales: {
-              y: {
-                beginAtZero: true,
-                title: { display: true, text: 'Tage' }
-              },
-              x: {
-                title: { display: true, text: 'Monat (YYYY-MM)' }
-              }
-            },
-            plugins: {
-              legend: { position: 'top' },
-              tooltip: { mode: 'index', intersect: false }
-            },
-            interaction: { mode: 'nearest', axis: 'x', intersect: false }
-          }
-        });
-
-        document.getElementById('statusMsg').innerText = 'Diagramm erfolgreich geladen.';
-      },
-      error: function(err) {
-        document.getElementById('statusMsg').innerText = 'Fehler beim Laden der CSV: ' + err;
+      const sortedMonths = Object.keys(monthlyData).sort();
+      if (!sortedMonths.length) {
+        document.getElementById('statusMsg').innerText = 'Keine gültigen Datensätze gefunden.';
+        return;
       }
-    });
+
+      const labels = [];
+      const avgLeadTimes = [];
+      const avgCycleTimes = [];
+
+      sortedMonths.forEach(month => {
+        const { leadSum, cycleSum, count } = monthlyData[month];
+        labels.push(month);
+        avgLeadTimes.push(leadSum / count);
+        avgCycleTimes.push(cycleSum / count);
+      });
+
+      drawChart(labels, avgLeadTimes, avgCycleTimes);
+      document.getElementById('statusMsg').innerText = 'Diagramm erfolgreich erstellt.';
+    }
+
+    function drawChart(labels, avgLeadTimes, avgCycleTimes) {
+      const ctx = document.getElementById('timeChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Durchschnittliche Lead Time (Tage)',
+              data: avgLeadTimes,
+              borderColor: 'rgba(54, 162, 235, 1)',
+              backgroundColor: 'rgba(54, 162, 235, 0.2)',
+              fill: true,
+              tension: 0.3,
+              pointRadius: 5,
+              pointHoverRadius: 7
+            },
+            {
+              label: 'Durchschnittliche Cycle Time (Tage)',
+              data: avgCycleTimes,
+              borderColor: 'rgba(255, 99, 132, 1)',
+              backgroundColor: 'rgba(255, 99, 132, 0.2)',
+              fill: true,
+              tension: 0.3,
+              pointRadius: 5,
+              pointHoverRadius: 7
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'Tage' }
+            },
+            x: {
+              title: { display: true, text: 'Monat (YYYY-MM)' }
+            }
+          },
+          plugins: {
+            legend: { position: 'top' },
+            tooltip: { mode: 'index', intersect: false }
+          },
+          interaction: { mode: 'nearest', axis: 'x', intersect: false }
+        }
+      });
+    }
   </script>
 </body>
 </html>
