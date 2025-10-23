@@ -18,8 +18,6 @@ if not GITHUB_TOKEN:
     sys.exit(1)
 
 # GraphQL-Abfrage mit korrekter Behandlung von Union-Typen
-query = f"""
-
 query {
   repository(owner: "harrykl", name: "tracker") {
     issues(first: 50, orderBy: {field: UPDATED_AT, direction: DESC}) {
@@ -58,7 +56,7 @@ query {
     }
   }
 }
-"""
+
 
 # Anfrage senden
 headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
