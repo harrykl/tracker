@@ -1,16 +1,23 @@
 import os
 import csv
 import requests
+import sys
 
 # GitHub GraphQL API Endpoint
 GITHUB_API_URL = "https://api.github.com/graphql"
 
-# GitHub Token and Repository Information
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+# 🔧 Trage hier deine Repository-Informationen ein
 REPO_OWNER = "harrykl"
 REPO_NAME = "tracker"
 
-# GraphQL Query with correct handling of union types
+# 🔐 GitHub Token aus Umgebungsvariable lesen
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+
+if not GITHUB_TOKEN:
+    print("❌ Fehler: GITHUB_TOKEN ist nicht gesetzt.")
+    sys.exit(1)
+
+# GraphQL-Abfrage mit korrekter Behandlung von Union-Typen
 query = f"""
 query {{
   repository(owner: "{REPO_OWNER}", name: "{REPO_NAME}") {{
@@ -46,20 +53,24 @@ query {{
 }}
 """
 
-# Send request to GitHub GraphQL API
+# Anfrage senden
 headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
 response = requests.post(GITHUB_API_URL, json={"query": query}, headers=headers)
 data = response.json()
 
-# Check for errors in the response
+# Fehlerbehandlung
 if "errors" in data:
-    print("Fehlerhafte API-Antwort:", data["errors"])
-    exit(1)
+    print("❌ Fehlerhafte API-Antwort:", data["errors"])
+    sys.exit(1)
 
-# Extract issue data
+if "data" not in data:
+    print("❌ Fehler: API-Antwort enthält keinen 'data'-Schlüssel.")
+    sys.exit(1)
+
+# Daten extrahieren
 issues = data["data"]["repository"]["issues"]["nodes"]
 
-# Write to CSV file
+# CSV schreiben
 os.makedirs("Prozessmetriken", exist_ok=True)
 with open("Prozessmetriken/issue_project_status.csv", mode="w", newline="", encoding="utf-8") as file:
     writer = csv.writer(file)
@@ -77,3 +88,5 @@ with open("Prozessmetriken/issue_project_status.csv", mode="w", newline="", enco
             project_status,
             issue["updatedAt"]
         ])
+
+print("✅ CSV-Datei erfolgreich erstellt: Prozessmetriken/issue_project_status.csv")
