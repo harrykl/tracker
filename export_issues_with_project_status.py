@@ -45,11 +45,16 @@ query {{
 # Anfrage senden
 headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
 response = requests.post(GITHUB_API_URL, json={"query": query}, headers=headers)
-print(response.json())
 data = response.json()
 
 # CSV-Datei schreiben
-issues = data["data"]["repository"]["issues"]["nodes"]
+# issues = data["data"]["repository"]["issues"]["nodes"]
+if "data" in data and "repository" in data["data"]:
+    issues = data["data"]["repository"]["issues"]["nodes"]
+else:
+    print("Fehlerhafte API-Antwort:", data)
+    exit(1)
+    
 with open("Prozessmetriken/issue_project_status.csv", mode="w", newline="", encoding="utf-8") as file:
     writer = csv.writer(file)
     writer.writerow(["Issue-ID", "Title", "Status", "Projektstatus", "Zeitstempel"])
