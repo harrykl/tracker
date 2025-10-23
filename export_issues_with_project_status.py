@@ -2,7 +2,6 @@ import os
 import csv
 import requests
 import sys
-from datetime import datetime
 
 # GitHub GraphQL API Endpoint
 GITHUB_API_URL = "https://api.github.com/graphql"
@@ -73,47 +72,65 @@ issues = data["data"]["repository"]["issues"]["nodes"]
 os.makedirs("Prozessmetriken", exist_ok=True)
 csv_path = "Prozessmetriken/issue_project_status.csv"
 
-# Vorhandene Daten laden, um Duplikate zu vermeiden
-existing_rows = set()
+# Bestehende Tabelle laden
+table = {}
+all_statuses = set()
 if os.path.exists(csv_path):
     with open(csv_path, mode="r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            key = (row["Issue-ID"], row["Projektstatus"])
-            existing_rows.add(key)
+            issue_id = row["Issue-ID"]
+            table[issue_id] = row
+            all_statuses.update(row.keys())
 
-# Neue Daten ergänzen
-with open(csv_path, mode="a", newline="", encoding="utf-8") as file:
-    writer = csv.writer(file)
-    # Header nur schreiben, wenn Datei neu
-    if os.path.getsize(csv_path) == 0:
-        writer.writerow(["Issue-ID", "Title", "Status", "Projektstatus", "Zeitstempel"])
+# Neue Daten einlesen
+for issue in issues:
+    issue_id = str(issue["number"])
+    title = issue["title"]
+    updated_at = issue["updatedAt"]
+    state = issue["state"]
 
-    for issue in issues:
-        issue_number = issue["number"]
-        issue_title = issue["title"]
-        issue_state = issue["state"]
-        updated_at = issue["updatedAt"]
+    # Status-Feld aus Project Items holen
+    project_status = None
+    for item in issue.get("projectItems", {}).get("nodes", []):
+        for field in item.get("fieldValues", {}).get("nodes", []):
+            if field.get("field", {}).get("name") == "Status":
+                project_status = field.get("name") or field.get("text") or field.get("date")
 
-        project_status = ""
-        for item in issue.get("projectItems", {}).get("nodes", []):
-            for field in item.get("fieldValues", {}).get("nodes", []):
-                field_name = field.get("field", {}).get("name")
-                if field_name == "Status":
-                    project_status = field.get("name") or field.get("text") or field.get("date") or ""
+    if not project_status:
+        continue
 
-        if not project_status:
-            continue  # Kein Status-Feld gefunden
+    all_statuses.add(project_status)
 
-        key = (str(issue_number), project_status)
-        if key not in existing_rows:
-            writer.writerow([
-                issue_number,
-                issue_title,
-                issue_state,
-                project_status,
-                updated_at
-            ])
-            existing_rows.add(key)
+    # Falls Issue noch nicht existiert → neue Zeile anlegen
+    if issue_id not in table:
+        table[issue_id] = {
+            "Issue-ID": issue_id,
+            "Title": title,
+            "GitHub-State": state,
+            "Last-UpdatedAt": updated_at
+        }
 
-print("✅ CSV-Datei erfolgreich aktualisiert:", csv_path)
+    row = table[issue_id]
+
+    # Immer aktualisieren, falls sich der GitHub-State oder updatedAt geändert hat
+    row["GitHub-State"] = state
+    row["Last-UpdatedAt"] = updated_at
+
+    # Wenn dieser Status noch keinen Zeitstempel hat → hinzufügen
+    if not row.get(project_status):
+        row[project_status] = updated_at
+
+# CSV neu schreiben (alle Issues, alle bekannten Status-Spalten)
+# „Issue-ID“, „Title“, „GitHub-State“ und „Last-UpdatedAt“ stehen immer am Anfang
+fixed_columns = ["Issue-ID", "Title", "GitHub-State", "Last-UpdatedAt"]
+status_columns = sorted(s for s in all_statuses if s not in fixed_columns)
+all_columns = fixed_columns + status_columns
+
+with open(csv_path, mode="w", newline="", encoding="utf-8") as f:
+    writer = csv.DictWriter(f, fieldnames=all_columns)
+    writer.writeheader()
+    for row in table.values():
+        writer.writerow(row)
+
+print("✅ CSV-Datei erfolgreich erstellt/aktualisiert:", csv_path)
