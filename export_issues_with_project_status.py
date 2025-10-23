@@ -25,6 +25,7 @@ query {
         number
         title
         state
+        createdAt
         updatedAt
         projectItems(first: 5) {
           nodes {
@@ -87,10 +88,11 @@ if os.path.exists(csv_path):
 for issue in issues:
     issue_id = str(issue["number"])
     title = issue["title"]
+    created_at = issue["createdAt"]
     updated_at = issue["updatedAt"]
     state = issue["state"]
 
-    # Status-Feld aus Project Items holen
+    # Projektstatus-Feld finden
     project_status = None
     for item in issue.get("projectItems", {}).get("nodes", []):
         for field in item.get("fieldValues", {}).get("nodes", []):
@@ -102,31 +104,45 @@ for issue in issues:
 
     all_statuses.add(project_status)
 
-    # Falls Issue noch nicht existiert → neue Zeile anlegen
+    # Falls Issue neu ist → Zeile erstellen
     if issue_id not in table:
         table[issue_id] = {
             "Issue-ID": issue_id,
             "Title": title,
             "GitHub-State": state,
+            "CreatedAt": created_at,
             "Last-UpdatedAt": updated_at
         }
 
     row = table[issue_id]
 
-    # Immer aktualisieren, falls sich der GitHub-State oder updatedAt geändert hat
+    # Immer aktualisieren
     row["GitHub-State"] = state
+    row["Title"] = title
+    row["CreatedAt"] = created_at
     row["Last-UpdatedAt"] = updated_at
 
-    # Wenn dieser Status noch keinen Zeitstempel hat → hinzufügen
+    # Wenn dieser Status noch keinen Zeitstempel hat, eintragen
     if not row.get(project_status):
         row[project_status] = updated_at
 
-# CSV neu schreiben (alle Issues, alle bekannten Status-Spalten)
-# „Issue-ID“, „Title“, „GitHub-State“ und „Last-UpdatedAt“ stehen immer am Anfang
-fixed_columns = ["Issue-ID", "Title", "GitHub-State", "Last-UpdatedAt"]
-status_columns = sorted(s for s in all_statuses if s not in fixed_columns)
-all_columns = fixed_columns + status_columns
+# --- 🔧 Spaltenreihenfolge festlegen ---
+preferred_order = [
+    "Issue-ID",
+    "Title",
+    "GitHub-State",
+    "CreatedAt",
+    "Last-UpdatedAt",
+    "Todo",
+    "In Progress",
+    "Done"
+]
 
+# Alle bekannten Statusfelder, die nicht in der bevorzugten Liste stehen, hinten anhängen
+extra_statuses = [s for s in sorted(all_statuses) if s not in preferred_order and s not in {"Issue-ID", "Title"}]
+all_columns = preferred_order + extra_statuses
+
+# CSV neu schreiben
 with open(csv_path, mode="w", newline="", encoding="utf-8") as f:
     writer = csv.DictWriter(f, fieldnames=all_columns)
     writer.writeheader()
