@@ -7,7 +7,8 @@ GITHUB_API_URL = "https://api.github.com/graphql"
 
 # GitHub Token and Repository Information
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
-REPO_OWNER, REPO_NAME = os.getenv("GITHUB_REPOSITORY").split("/")
+REPO_OWNER = "harrykl"
+REPO_NAME = "tracker"
 
 # GraphQL Query with correct handling of union types
 query = f"""
