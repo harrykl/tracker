@@ -1,8 +1,7 @@
 name: Issue Status Tracker
 
 on:
-  issues:
-    types: [opened, edited, closed, reopened]
+  workflow_dispatch:
 
 jobs:
   export-issue-status:
