@@ -45,6 +45,7 @@ query {{
 # Anfrage senden
 headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
 response = requests.post(GITHUB_API_URL, json={"query": query}, headers=headers)
+print(response.json())
 data = response.json()
 
 # CSV-Datei schreiben
