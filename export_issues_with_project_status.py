@@ -8,7 +8,7 @@ GITHUB_API_URL = "https://api.github.com/graphql"
 # GitHub Token und Repository-Informationen
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 REPO_OWNER = "harrykl"
-REPO_NAME = "@harrykl's untitled project"
+REPO_NAME = "tracker"
 
 # GraphQL-Abfrage
 query = f"""
