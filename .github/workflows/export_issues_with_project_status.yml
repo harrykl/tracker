@@ -1,0 +1,38 @@
+name: Issue Status Tracker
+
+on:
+  issues:
+    types: [opened, edited, closed, reopened]
+  workflow_dispatch:  # Optional: erlaubt manuelles Auslösen über GitHub UI
+
+jobs:
+  export-issue-status:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 📥 Repository auschecken
+      uses: actions/checkout@v3
+
+    - name: 🐍 Python einrichten
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+
+    - name: 📦 Abhängigkeiten installieren
+      run: pip install requests
+
+    - name: 📊 Projektstatus der Issues exportieren
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: |
+        mkdir -p Prozessmetriken
+        python export_issues_with_project_status.py
+
+    - name: 💾 CSV-Datei committen und pushen
+      run: |
+        git config --global user.name "github-actions"
+        git config --global user.email "github-actions@github.com"
+        git add Prozessmetriken/issue_project_status.csv
+        git commit -m "Aktualisiere Issue-Projektstatus-Metriken"
+        git push
