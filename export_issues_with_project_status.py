@@ -33,19 +33,25 @@ query {
               nodes {
                 ... on ProjectV2ItemFieldSingleSelectValue {
                   field {
-                    name
+                    ... on ProjectV2FieldCommon {
+                      name
+                    }
                   }
                   name
                 }
                 ... on ProjectV2ItemFieldTextValue {
                   field {
-                    name
+                    ... on ProjectV2FieldCommon {
+                      name
+                    }
                   }
                   text
                 }
                 ... on ProjectV2ItemFieldDateValue {
                   field {
-                    name
+                    ... on ProjectV2FieldCommon {
+                      name
+                    }
                   }
                   date
                 }
