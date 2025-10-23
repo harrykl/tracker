@@ -21,7 +21,7 @@ if not GITHUB_TOKEN:
 query = f"""
 
 query {
-  repository(owner: REPO_OWNER, name: REPO_NAME) {
+  repository(owner = REPO_OWNER, name = REPO_NAME) {
     issues(first: 50, orderBy: {field: UPDATED_AT, direction: DESC}) {
       nodes {
         number
