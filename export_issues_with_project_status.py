@@ -1,18 +1,15 @@
 import os
 import csv
 import requests
-import logging
-logging.basicConfig(level=logging.DEBUG)
 
 # GitHub GraphQL API Endpoint
 GITHUB_API_URL = "https://api.github.com/graphql"
 
-# GitHub Token und Repository-Informationen
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
-REPO_OWNER = "harrykl"
-REPO_NAME = "tracker"
+# GitHub Token and Repository Information
+GITHUB_TOKEN = os.getenv("GH_TOKEN")
+REPO_OWNER, REPO_NAME = os.getenv("GITHUB_REPOSITORY").split("/")
 
-# GraphQL-Abfrage
+# GraphQL Query with correct handling of union types
 query = f"""
 query {{
   repository(owner: "{REPO_OWNER}", name: "{REPO_NAME}") {{
@@ -32,6 +29,12 @@ query {{
                 ... on ProjectV2ItemFieldSingleSelectValue {{
                   name
                 }}
+                ... on ProjectV2ItemFieldTextValue {{
+                  text
+                }}
+                ... on ProjectV2ItemFieldDateValue {{
+                  date
+                }}
               }}
             }}
           }}
@@ -42,28 +45,30 @@ query {{
 }}
 """
 
-# Anfrage senden
-headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
+# Send request to GitHub GraphQL API
+headers = {"Authorization": f"Bearer {GH_TOKEN}"}
 response = requests.post(GITHUB_API_URL, json={"query": query}, headers=headers)
 data = response.json()
 
-# CSV-Datei schreiben
-# issues = data["data"]["repository"]["issues"]["nodes"]
-if "data" in data and "repository" in data["data"]:
-    issues = data["data"]["repository"]["issues"]["nodes"]
-else:
-    print("Fehlerhafte API-Antwort:", data)
+# Check for errors in the response
+if "errors" in data:
+    print("Fehlerhafte API-Antwort:", data["errors"])
     exit(1)
-    
+
+# Extract issue data
+issues = data["data"]["repository"]["issues"]["nodes"]
+
+# Write to CSV file
+os.makedirs("Prozessmetriken", exist_ok=True)
 with open("Prozessmetriken/issue_project_status.csv", mode="w", newline="", encoding="utf-8") as file:
     writer = csv.writer(file)
     writer.writerow(["Issue-ID", "Title", "Status", "Projektstatus", "Zeitstempel"])
     for issue in issues:
         project_status = ""
-        for item in issue["projectItems"]["nodes"]:
-            for field in item["fieldValues"]["nodes"]:
-                if field["field"]["name"] == "Status":
-                    project_status = field.get("name", "")
+        for item in issue.get("projectItems", {}).get("nodes", []):
+            for field in item.get("fieldValues", {}).get("nodes", []):
+                if field.get("field", {}).get("name") == "Status":
+                    project_status = field.get("name") or field.get("text") or field.get("date") or ""
         writer.writerow([
             issue["number"],
             issue["title"],
