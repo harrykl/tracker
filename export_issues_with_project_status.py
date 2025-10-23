@@ -19,38 +19,45 @@ if not GITHUB_TOKEN:
 
 # GraphQL-Abfrage mit korrekter Behandlung von Union-Typen
 query = f"""
-query {{
-  repository(owner: "{REPO_OWNER}", name: "{REPO_NAME}") {{
-    issues(first: 50, orderBy: {{field: UPDATED_AT, direction: DESC}}) {{
-      nodes {{
+
+query {
+  repository(owner: REPO_OWNER, name: REPO_NAME) {
+    issues(first: 50, orderBy: {field: UPDATED_AT, direction: DESC}) {
+      nodes {
         number
         title
         state
         updatedAt
-        projectItems(first: 5) {{
-          nodes {{
-            fieldValues(first: 10) {{
-              nodes {{
-                field {{
+        projectItems(first: 5) {
+          nodes {
+            fieldValues(first: 10) {
+              nodes {
+                ... on ProjectV2ItemFieldSingleSelectValue {
+                  field {
+                    name
+                  }
                   name
-                }}
-                ... on ProjectV2ItemFieldSingleSelectValue {{
-                  name
-                }}
-                ... on ProjectV2ItemFieldTextValue {{
+                }
+                ... on ProjectV2ItemFieldTextValue {
+                  field {
+                    name
+                  }
                   text
-                }}
-                ... on ProjectV2ItemFieldDateValue {{
+                }
+                ... on ProjectV2ItemFieldDateValue {
+                  field {
+                    name
+                  }
                   date
-                }}
-              }}
-            }}
-          }}
-        }}
-      }}
-    }}
-  }}
-}}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
 """
 
 # Anfrage senden
