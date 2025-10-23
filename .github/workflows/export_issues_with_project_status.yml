@@ -1,4 +1,4 @@
-name: Issue Status Tracker
+name: Issue Status Tracker with Project
 
 on:
   issues:
