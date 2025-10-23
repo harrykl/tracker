@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <title>Kumulativer Durchschnitt Lead- & Cycle-Time (GitHub)</title>
+  <title>Kumulativer Durchschnitt Lead- & Cycle-Time (mit heutigem Wert)</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
   <style>
@@ -32,16 +32,14 @@
       download: true,
       header: true,
       skipEmptyLines: true,
-      delimiter: ";", // ggf. entfernen, falls deine CSV Kommas verwendet
+      delimiter: ";", // ggf. entfernen, falls CSV Kommas verwendet
       complete: function(results) {
         const data = results.data;
-        console.log("CSV geladen:", data.length, "Zeilen");
         if (!data.length) {
           document.getElementById('statusMsg').innerText = 'Keine Daten gefunden.';
           return;
         }
 
-        // Daten pro Tag aggregieren
         const dailyData = {};
         data.forEach(row => {
           const createdAt = row['CreatedAt'] || row['created_at'];
@@ -53,22 +51,22 @@
           const date = new Date(createdAt);
           if (isNaN(date)) return;
 
-          const dateKey = date.toISOString().split('T')[0]; // yyyy-mm-dd
-
+          const dateKey = date.toISOString().split('T')[0];
           const leadTime = parseFloat(leadTimeStr.replace(',', '.'));
           const cycleTime = parseFloat(cycleTimeStr.replace(',', '.'));
           if (isNaN(leadTime) || isNaN(cycleTime)) return;
 
-          if (!dailyData[dateKey]) {
-            dailyData[dateKey] = { leadSum: 0, cycleSum: 0, count: 0 };
-          }
-
+          if (!dailyData[dateKey]) dailyData[dateKey] = { leadSum: 0, cycleSum: 0, count: 0 };
           dailyData[dateKey].leadSum += leadTime;
           dailyData[dateKey].cycleSum += cycleTime;
           dailyData[dateKey].count++;
         });
 
         const sortedDates = Object.keys(dailyData).sort();
+        if (!sortedDates.length) {
+          document.getElementById('statusMsg').innerText = 'Keine gültigen Datensätze.';
+          return;
+        }
 
         const labels = [];
         const cumulativeLead = [];
@@ -78,28 +76,30 @@
         let cycleSumTotal = 0;
         let totalCount = 0;
 
-        // kumulativen Durchschnitt berechnen
         sortedDates.forEach(date => {
           const { leadSum, cycleSum, count } = dailyData[date];
           leadSumTotal += leadSum;
           cycleSumTotal += cycleSum;
           totalCount += count;
-
           labels.push(date);
           cumulativeLead.push(leadSumTotal / totalCount);
           cumulativeCycle.push(cycleSumTotal / totalCount);
         });
 
-        drawChart(labels, cumulativeLead, cumulativeCycle);
+        // heutigen Wert bestimmen (letzter in der Liste)
+        const lastDate = labels[labels.length - 1];
+        const todayLead = cumulativeLead[cumulativeLead.length - 1];
+        const todayCycle = cumulativeCycle[cumulativeCycle.length - 1];
+
+        drawChart(labels, cumulativeLead, cumulativeCycle, lastDate, todayLead, todayCycle);
         document.getElementById('statusMsg').innerText = 'Diagramm erfolgreich geladen.';
       },
       error: function(err) {
-        console.error(err);
         document.getElementById('statusMsg').innerText = 'Fehler beim Laden der CSV.';
       }
     });
 
-    function drawChart(labels, cumulativeLead, cumulativeCycle) {
+    function drawChart(labels, cumulativeLead, cumulativeCycle, lastDate, todayLead, todayCycle) {
       const ctx = document.getElementById('timeChart').getContext('2d');
       new Chart(ctx, {
         type: 'line',
@@ -113,8 +113,7 @@
               backgroundColor: 'rgba(54, 162, 235, 0.2)',
               tension: 0.3,
               fill: true,
-              pointRadius: 3,
-              pointHoverRadius: 5
+              pointRadius: 2
             },
             {
               label: 'Kumulativer Durchschnitt Cycle Time (Tage)',
@@ -123,8 +122,27 @@
               backgroundColor: 'rgba(255, 99, 132, 0.2)',
               tension: 0.3,
               fill: true,
-              pointRadius: 3,
-              pointHoverRadius: 5
+              pointRadius: 2
+            },
+            // heutiger Punkt LeadTime
+            {
+              label: 'Heutiger LeadTime-Durchschnitt',
+              data: labels.map(d => (d === lastDate ? todayLead : null)),
+              borderColor: 'transparent',
+              backgroundColor: 'rgba(54, 162, 235, 1)',
+              pointRadius: 8,
+              pointHoverRadius: 10,
+              type: 'scatter'
+            },
+            // heutiger Punkt CycleTime
+            {
+              label: 'Heutiger CycleTime-Durchschnitt',
+              data: labels.map(d => (d === lastDate ? todayCycle : null)),
+              borderColor: 'transparent',
+              backgroundColor: 'rgba(255, 99, 132, 1)',
+              pointRadius: 8,
+              pointHoverRadius: 10,
+              type: 'scatter'
             }
           ]
         },
