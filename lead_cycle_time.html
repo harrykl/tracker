@@ -50,8 +50,8 @@
 
         data.forEach(row => {
           const createdAt = row['CreatedAt'];
-          const leadTimeStr = row['LeadTime'];
-          const cycleTimeStr = row['CycleTime'];
+          const leadTimeStr = row['Lead Time (days)'];
+          const cycleTimeStr = row['Cycle Time (days)'];
 
           if (!createdAt || !leadTimeStr || !cycleTimeStr) return;
 
